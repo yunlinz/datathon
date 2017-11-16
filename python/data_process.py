@@ -8,20 +8,31 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.cross_validation import KFold
 import sklearn as sk
 from functools import reduce
+from multiprocessing import Pool
+
+num_partitions = 100 #number of partitions to split dataframe
+num_cores = 8 #number of cores on your machine
+
+def parallelize_dataframe(df, func):
+    df_split = np.array_split(df, num_partitions)
+    pool = Pool(num_cores)
+    df = pd.concat(pool.map(func, df_split))
+    pool.close()
+    pool.join()
+    return df
 
 def process_discrete_cols(df: DataFrame, cols: Iterable[str]):
     for c in cols:
         vals = df[c].unique()
         for v in vals:
-            df[c + '=' + str(v)] = (df[c] == v).astype(int)
-    df.drop(cols, inplace=True, axis=1)
+            df[c + '=' + v] = (df[c] == v).astype(int)
 
 def process_set_cols(df: DataFrame, cols: Iterable[str], parser):
     for c in cols:
-        vals = set(reduce(lambda x, y: x+y, df[c].apply(lambda x: parser(x)).values.flatten().tolist()))
-        for item in vals:
-            df[c + '=' + str(item)] = (df[c].apply(lambda x: item in x)).astype(int)
-    df.drop(cols, inplace=True, axis=1)
+        temp = df[c].apply(lambda x: set(map(lambda y: y.strip(), parser(x)))).values.tolist()
+        vals = reduce(lambda s1, s2: s1.union(s2), temp)  
+        for v in vals:
+            df[v] = (df[c].apply(lambda x: v in x)).astype(int)
 
 def clean_currency(df: DataFrame, cols: Iterable[str]):
     for c in cols:
