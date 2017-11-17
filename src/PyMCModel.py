@@ -5,11 +5,39 @@ import matplotlib.pyplot as plt
 
 class PyMC3Model(object):
     def __init__(self, N, d, k, T):
-        self.sample_minibatch = N
-        self.latent_dimension = d
-        self.observ_dimension = k
-        self.num_time_steps = T
-        self.hidden_states = []
+      self.sample_minibatch = N
+      self.latent_dimension = d
+      self.observ_dimension = k
+      self.num_time_steps = T
+      self.hidden_states = []
+      self.observed_states = []
+
+      self.function = None
+      self.model = None
+
+    def make_func(self):
+      raise NotImplementedError
+
+    def setup_model(self, data):
+        with pm.Model() as model:
+            self.transmat_ = pm.Normal('Tmat', mu=0, sd=1, shape=(self.latent_dimension))
+            self.hidden_states.append(
+                pm.Normal('H0', mu=0, sd=1, shape=(self.sample_minibatch, self.latent_dimension), testval=np.random.randn(self.sample_minibatch, self.latent_dimension))
+            )
+            for i in range(1, self.num_time_steps):
+              self.hidden_states.append(
+                th.dot(self.hidden_states[-1], diag(self.transmat_))
+              )
+            F = pm.Normal('F', mu=0, sd=1, shape=(self.latent_dimension, self.observ_dimension), testval=np.random.randn(self.latent_dimension, self.observ_dimension))
+            for i in range(self.num_time_steps):
+              self.observed_states.append(
+                  th.dot(self.hidden_states[i], F) + pm.Normal('X_{}'.format(i), mu=0, sd=1, shape=(self.sample_minibatch, self.observ_dimension), observed=data[i])
+              )
+            approx = pm.fit(n = 50000, method=pm.ADVI())
+            trace = approx.sample(100)
+            pm.traceplot(trace)
+            plt.savefig('fig.pdf')
+
 
 
 latent_dim = 3
@@ -32,22 +60,5 @@ x0 = np.dot(np.dot(h0, F), L.T).reshape((N, obs_dim)).reshape((N, obs_dim))
 x1 = np.dot(np.dot(h1, F), L.T).reshape((N, obs_dim)).reshape((N, obs_dim))
 x2 = np.dot(np.dot(h2, F), L.T).reshape((N, obs_dim)).reshape((N, obs_dim))
 
-with pm.Model() as model:
-    H0 = pm.Normal('H0', mu=0, sd=1, shape=(N, latent_dim), testval=np.random.randn(N, latent_dim))
-    T  = pm.Normal('T', mu=1, sd=1, shape=(latent_dim))
-
-    Tmat = diag(T)
-    H1 = th.dot(H0, Tmat)
-
-    H2 = th.dot(H1, Tmat)
-
-    F = pm.Normal('F', mu=0, sd=1, shape=(latent_dim, obs_dim), testval=np.random.randn(latent_dim, obs_dim))
-    X0 = pm.Normal('X0', mu=th.dot(H0, F), sd=1, observed=x0)
-    X1 = pm.Normal('X1', mu=th.dot(H1, F), sd=1, observed=x1)
-    X2 = pm.Normal('X2', mu=th.dot(H2, F), sd=1, observed=x2)
-
-    step1 = pm.HamiltonianMC([F])
-    step2 = pm.HamiltonianMC([H0, T])
-    trace = pm.sample(500, [step1, step2])
-    pm.traceplot(trace)
-    plt.savefig('trace.pdf')
+model = PyMC3Model(N, latent_dim, obs_dim, 3)
+model.setup_model([x0, x1, x2])

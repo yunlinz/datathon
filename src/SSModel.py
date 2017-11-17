@@ -3,6 +3,7 @@ import tensorflow as tf
 
 from edward.models import Normal, WishartFull, MultivariateNormalFullCovariance, MultivariateNormalDiag, Empirical, WishartCholesky
 from tensorflow.contrib.distributions import WishartCholesky
+
 class AbstractSSModel(object):
     def __init__(self, n, d, k, T):
         self.function = None
