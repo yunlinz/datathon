@@ -30,7 +30,7 @@ def find_inst(college_list, data):
       ratio2 = fuzz.ratio(data[0].upper(),i_inst_name)
       ratio = max(ratio1, ratio2)
       #print (ratio)
-      if ratio > 60:
+      if ratio > 90:
         return line[0], line[1]
 
   # print(data)
